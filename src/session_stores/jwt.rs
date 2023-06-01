@@ -1,39 +1,45 @@
 use async_trait::async_trait;
+use hmac::{Hmac, Mac};
+use jwt::{SignWithKey, VerifyWithKey};
 use serde::{Deserialize, Serialize};
-use thruster::{
-    context::typed_hyper_context::TypedHyperContext,
-    middleware::cookies::{Cookie, CookieOptions, HasCookies},
-};
+use sha2::Sha256;
 
-use crate::{Session, SessionStore};
+use crate::SessionStore;
 
-pub struct JwtSession {}
+#[derive(Debug)]
+pub enum Errors {
+    Serde,
+    Jwt,
+}
+
+pub struct JwtSession {
+    secret: Hmac<Sha256>,
+}
+
+impl JwtSession {
+    pub fn new(secret: &str) -> Self {
+        return Self {
+            secret: Hmac::new_from_slice(secret.as_bytes()).unwrap(),
+        };
+    }
+}
+
 #[async_trait]
-impl<S: Serialize + for<'a> Deserialize<'a> + Send + 'static + Clone, C: Send> SessionStore<S, C>
+impl<S: Serialize + for<'a> Deserialize<'a> + Send + 'static + Clone> SessionStore<S>
     for JwtSession
 {
-    type Error = ();
+    type Error = Errors;
 
-    async fn insert(
-        &self,
-        context: &mut TypedHyperContext<C>,
-        session: Session<S>,
-    ) -> Result<(), Self::Error> {
-        let session_str = serde_json::to_string(&session.data.unwrap()).unwrap();
+    async fn gen_cookie(&self, session: S) -> Result<String, Self::Error> {
+        let jwt = session
+            .sign_with_key(&self.secret)
+            .map_err(|_| Errors::Jwt)?;
 
-        context.set_cookies(vec![Cookie {
-            key: "thruster_session".to_string(),
-            value: session_str,
-            options: match session.cookie_options {
-                Some(x) => x,
-                None => CookieOptions::default(),
-            },
-        }]);
-
-        return Ok(());
+        return Ok(jwt);
     }
 
-    async fn retrieve(&self, cookie_value: &str) -> Result<S, Self::Error> {
-        return Ok(serde_json::from_str(cookie_value).unwrap());
+    async fn retrieve(&self, cookie_value: &str) -> Option<S> {
+        let session: Option<S> = cookie_value.verify_with_key(&self.secret).ok();
+        return session;
     }
 }
