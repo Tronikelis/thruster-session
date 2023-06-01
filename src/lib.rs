@@ -1,32 +1,35 @@
 #![allow(clippy::needless_return)]
 
-use async_trait::async_trait;
-use std::{collections::HashMap, fmt::Debug};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use thruster::{
-    context::typed_hyper_context::TypedHyperContext, middleware::cookies::HasCookies,
+    context::typed_hyper_context::TypedHyperContext,
+    middleware::cookies::{CookieOptions, HasCookies},
     middleware_fn, ContextState, MiddlewareNext, MiddlewareResult,
 };
 
-pub struct Session<S>(Option<S>);
+pub mod session_stores;
+use session_stores::SessionStore;
 
-#[async_trait]
-pub trait SessionStore<S> {
-    type Error: Send + Debug;
-
-    async fn insert(&self, session: Session<S>) -> Result<(), Self::Error>;
-    async fn retrieve(&self, cookie_value: &str) -> Result<Session<S>, Self::Error>;
+#[derive(Clone)]
+pub struct Session<S: Serialize + for<'a> Deserialize<'a> + Clone> {
+    cookie_options: Option<CookieOptions>,
+    data: Option<S>,
+    secret: String,
 }
 
 #[middleware_fn]
 async fn session_middleware<
     C: Send + ContextState<Session<S>> + ContextState<Box<T>>,
-    T: 'static + SessionStore<S> + Sync,
-    S: 'static + Send + Sync,
+    T: 'static + SessionStore<S, C> + Sync,
+    S: 'static + Send + Sync + for<'a> Deserialize<'a> + Serialize + Clone,
 >(
     mut context: TypedHyperContext<C>,
     next: MiddlewareNext<TypedHyperContext<C>>,
 ) -> MiddlewareResult<TypedHyperContext<C>> {
     let session_store: &Box<_> = context.extra.get();
+    let session: &Session<_> = context.extra.get();
+
     // get the session id from the request cookie
     let cookies: HashMap<String, String> = context
         .get_cookies()
@@ -41,8 +44,11 @@ async fn session_middleware<
         .unwrap()
         .to_string();
 
-    let session = session_store.retrieve(&cookie_value).await.unwrap();
-    *context.extra.get_mut() = session;
+    let session_data = session_store.retrieve(&cookie_value).await.unwrap();
+    *context.extra.get_mut() = Session {
+        data: Some(session_data),
+        ..session.clone()
+    };
 
     return next(context).await;
 }
