@@ -77,10 +77,7 @@ impl<S: Clone + Serialize + for<'a> Deserialize<'a> + Send + Sync + 'static> Ses
         if self.verify_string(cookie_value).is_ok() {
             let session_str: Option<String> = self.connection_manager.get(cookie_value).await.ok();
             if let Some(session_str) = session_str {
-                let session: Result<S, _> = serde_json::from_str(&session_str);
-                if let Ok(session) = session {
-                    return Some(session);
-                }
+                return serde_json::from_str(&session_str).ok();
             }
         }
 
