@@ -19,14 +19,14 @@ pub struct Session<S> {
 #[middleware_fn]
 pub async fn session_middleware<
     C: Send + ContextState<Session<S>> + ContextState<Box<T>>,
-    T: 'static + SessionStore<S> + Sync,
+    T: 'static + SessionStore<S> + Sync + Send,
     S: 'static + Send + Sync + for<'a> Deserialize<'a> + Serialize + Clone,
 >(
     mut context: TypedHyperContext<C>,
     next: MiddlewareNext<TypedHyperContext<C>>,
 ) -> MiddlewareResult<TypedHyperContext<C>> {
-    let session_store: &Box<_> = context.extra.get();
-    let current_session: &Session<_> = context.extra.get();
+    let current_session = (context.extra.get() as &Session<_>).clone();
+    let session_store: &mut Box<_> = context.extra.get_mut();
 
     // this does not get the cookie from the headers
     let cookie_value = context.cookies.get(&current_session.cookie_name);

@@ -78,8 +78,8 @@ async fn login_jwt_route(
         email: "foo@bar.com".to_string(),
     };
 
-    let session_store: &Box<JwtSession> = context.extra.get();
-    let cookie_value = session_store.gen_cookie(user).await.unwrap();
+    let session_store: &mut Box<JwtSession> = context.extra.get_mut();
+    let cookie_value = session_store.gen_cookie(user, 100).await.unwrap();
 
     context.cookie(COOKIE_NAME, &cookie_value, &CookieOptions::default());
 

@@ -6,11 +6,7 @@ use sha2::Sha256;
 
 use crate::SessionStore;
 
-#[derive(Debug)]
-pub enum Errors {
-    Serde,
-    Jwt,
-}
+use super::Errors;
 
 pub struct JwtSession {
     secret: Hmac<Sha256>,
@@ -30,7 +26,7 @@ impl<S: Serialize + for<'a> Deserialize<'a> + Send + 'static + Clone> SessionSto
 {
     type Error = Errors;
 
-    async fn gen_cookie(&self, session: S) -> Result<String, Self::Error> {
+    async fn gen_cookie(&mut self, session: S, _expiry_s: usize) -> Result<String, Self::Error> {
         let jwt = session
             .sign_with_key(&self.secret)
             .map_err(|_| Errors::Jwt)?;
@@ -38,12 +34,12 @@ impl<S: Serialize + for<'a> Deserialize<'a> + Send + 'static + Clone> SessionSto
         return Ok(jwt);
     }
 
-    async fn retrieve(&self, cookie_value: &str) -> Option<S> {
+    async fn retrieve(&mut self, cookie_value: &str) -> Option<S> {
         let session: Option<S> = cookie_value.verify_with_key(&self.secret).ok();
         return session;
     }
 
-    async fn remove(&self, _session: S) -> Result<(), Self::Error> {
+    async fn remove(&mut self, _cookie_value: &str) -> Result<(), Self::Error> {
         panic!("jwt store can't remove sessions!");
     }
 }
