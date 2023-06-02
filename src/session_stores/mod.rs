@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
+#[cfg(feature = "jwt_session")]
 pub mod jwt;
 
 #[async_trait]
