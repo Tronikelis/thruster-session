@@ -58,10 +58,14 @@ fn create_app() -> App<HyperRequest, Context, ServerState> {
 async fn hello_world() {
     let app = create_app().get("/", m![root]).commit();
 
-    Testable::get(&app, "/", vec![])
-        .await
-        .unwrap()
-        .expect_status(200, "OK");
+    Testable::get(
+        &app,
+        "/",
+        vec![(String::from("what"), String::from("WHAT"))],
+    )
+    .await
+    .unwrap()
+    .expect_status(200, "OK");
 }
 
 #[middleware_fn]
@@ -103,7 +107,51 @@ async fn login_jwt() {
     panic!("set-cookie don't exist");
 }
 
+#[middleware_fn]
+async fn session_jwt_route(
+    mut context: Context,
+    _next: MiddlewareNext<Context>,
+) -> MiddlewareResult<Context> {
+    let session: &Session<_> = context.extra.get();
+    context.body(&serde_json::to_string(session.data.as_ref().unwrap()).unwrap());
+    return Ok(context);
+}
+
 #[tokio::test]
 async fn session_jwt() {
-    todo!("session jwt nyi");
+    let app = create_app()
+        .post("/login", m![login_jwt_route])
+        .get("/", m![session_jwt_route])
+        .commit();
+
+    let login = Testable::post(&app, "/login", vec![], "".into())
+        .await
+        .unwrap()
+        .expect_status(200, "OK");
+
+    let mut cookie_header = String::new();
+
+    for (key, value) in login.headers {
+        if key != "set-cookie" {
+            continue;
+        }
+
+        cookie_header.push_str(value.split(';').next().unwrap());
+        break;
+    }
+
+    let response = Testable::get(
+        &app,
+        "/",
+        vec![("cookie".to_string(), cookie_header.clone())],
+    )
+    .await
+    .unwrap()
+    .expect_status(200, "OK");
+
+    println!(
+        "cookie header: {}, response: {}",
+        cookie_header,
+        String::from_utf8(response.body).unwrap()
+    );
 }

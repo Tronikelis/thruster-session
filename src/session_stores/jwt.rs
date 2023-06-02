@@ -42,4 +42,8 @@ impl<S: Serialize + for<'a> Deserialize<'a> + Send + 'static + Clone> SessionSto
         let session: Option<S> = cookie_value.verify_with_key(&self.secret).ok();
         return session;
     }
+
+    async fn remove(&self, _session: S) -> Result<(), Self::Error> {
+        panic!("jwt store can't remove sessions!");
+    }
 }

@@ -28,6 +28,7 @@ pub async fn session_middleware<
     let session_store: &Box<_> = context.extra.get();
     let current_session: &Session<_> = context.extra.get();
 
+    // this does not get the cookie from the headers
     let cookie_value = context.cookies.get(&current_session.cookie_name);
     if let Some(cookie_value) = cookie_value {
         let session = session_store.retrieve(&cookie_value.value).await;

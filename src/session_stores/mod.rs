@@ -10,4 +10,5 @@ pub trait SessionStore<S: Serialize + for<'a> Deserialize<'a> + Send + Clone> {
 
     async fn gen_cookie(&self, session: S) -> Result<String, Self::Error>;
     async fn retrieve(&self, cookie_value: &str) -> Option<S>;
+    async fn remove(&self, session: S) -> Result<(), Self::Error>;
 }
